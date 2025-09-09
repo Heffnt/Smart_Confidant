@@ -15,5 +15,5 @@ jobs:
           lfs: true
       - name: Push to hub
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: git push --force https://rcpaffenroth:$HF_TOKEN@huggingface.co/spaces/rcpaffenroth/CSDS553_Demo HEAD:main
+          HF_TOKEN: ${{ secrets.Smart_Confidant_Token }}
+        run: git push --force https://heffnt:$HF_TOKEN@huggingface.co/spaces/heffnt/Smart_Confidant HEAD:main
