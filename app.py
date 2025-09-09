@@ -112,7 +112,7 @@ def respond(
 chatbot = gr.ChatInterface(
     fn=respond,
     additional_inputs=[
-        gr.Textbox(value="You are a friendly Chatbot.", label="System message"),
+        gr.Textbox(value="You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob.", label="System message"),
         gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
         gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
         gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
