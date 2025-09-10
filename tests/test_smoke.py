@@ -18,7 +18,7 @@ def test_api_requires_token():
         temperature=0.2,
         top_p=0.9,
         hf_token=Token(hf_token),
-        use_local_model=False,
+        selected_model="openai/gpt-oss-20b (api)",
     )
     first = next(gen)
     assert "please log in" not in first.lower()  # shouldn't get warning
