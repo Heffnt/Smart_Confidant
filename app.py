@@ -3,8 +3,8 @@ from huggingface_hub import InferenceClient
 import os
 
 # Configuration
-LOCAL_MODEL = "microsoft/Phi-3-mini-4k-instruct"
-API_MODEL = "jakeboggs/MTG-Llama" # "openai/gpt-oss-20b"
+LOCAL_MODEL = "jakeboggs/MTG-Llama" # "microsoft/Phi-3-mini-4k-instruct"
+API_MODEL = "openai/gpt-oss-20b"
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
 
 pipe = None
