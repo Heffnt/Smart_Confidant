@@ -7,12 +7,6 @@ LOCAL_MODELS = ["jakeboggs/MTG-Llama", "microsoft/Phi-3-mini-4k-instruct"]
 API_MODELS = ["openai/gpt-oss-20b", "meta-llama/Meta-Llama-3-8B-Instruct"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
 
-# Avatar images configuration (user, assistant)
-AVATAR_IMAGES = ["assets/smart_confidant_face.png", "assets/monster_face.png"]
-
-# Set static paths for serving images
-gr.set_static_paths(paths=["assets/"])
-
 # Create model options with labels
 MODEL_OPTIONS = []
 for model in LOCAL_MODELS:
@@ -141,7 +135,6 @@ chatbot = gr.ChatInterface(
         gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0]),
     ],
     type="messages",
-    avatar_images=AVATAR_IMAGES,
 )
 
 with gr.Blocks(css=fancy_css) as demo:
