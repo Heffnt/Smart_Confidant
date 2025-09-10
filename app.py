@@ -3,9 +3,16 @@ from huggingface_hub import InferenceClient
 import os
 
 # Configuration
-LOCAL_MODEL = "jakeboggs/MTG-Llama" # "microsoft/Phi-3-mini-4k-instruct"
-API_MODEL = "openai/gpt-oss-20b"
+LOCAL_MODELS = ["jakeboggs/MTG-Llama", "microsoft/Phi-3-mini-4k-instruct"]
+API_MODELS = ["openai/gpt-oss-20b", "meta-llama/Meta-Llama-3-8B-Instruct"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
+
+# Create model options with labels
+MODEL_OPTIONS = []
+for model in LOCAL_MODELS:
+    MODEL_OPTIONS.append(f"{model} (local)")
+for model in API_MODELS:
+    MODEL_OPTIONS.append(f"{model} (api)")
 
 pipe = None
 stop_inference = False
@@ -58,7 +65,7 @@ def respond(
     temperature,
     top_p,
     hf_token: gr.OAuthToken,
-    use_local_model: bool,
+    selected_model: str,
 ):
     global pipe
 
@@ -67,14 +74,18 @@ def respond(
     messages.extend(history)
     messages.append({"role": "user", "content": message})
 
+    # Determine if model is local or API and extract model name
+    is_local = selected_model.endswith("(local)")
+    model_name = selected_model.replace(" (local)", "").replace(" (api)", "")
+    
     response = ""
 
-    if use_local_model:
-        print("[MODE] local")
+    if is_local:
+        print(f"[MODE] local - {model_name}")
         from transformers import pipeline
         import torch
-        if pipe is None:
-            pipe = pipeline("text-generation", model=LOCAL_MODEL)
+        if pipe is None or pipe.model.name_or_path != model_name:
+            pipe = pipeline("text-generation", model=model_name)
 
         # Build prompt as plain text
         prompt = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
@@ -91,13 +102,13 @@ def respond(
         yield response.strip()
 
     else:
-        print("[MODE] api")
+        print(f"[MODE] api - {model_name}")
 
         if hf_token is None or not getattr(hf_token, "token", None):
             yield "⚠️ Please log in with your Hugging Face account first."
             return
 
-        client = InferenceClient(token=hf_token.token, model=API_MODEL)
+        client = InferenceClient(token=hf_token.token, model=model_name)
 
         for chunk in client.chat_completion(
             messages,
@@ -121,7 +132,7 @@ chatbot = gr.ChatInterface(
         gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
         gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
         gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
-        gr.Checkbox(label=f"Use Local Model (API model is {API_MODEL} and local model is {LOCAL_MODEL})", value=False),
+        gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0]),
     ],
     type="messages",
 )
