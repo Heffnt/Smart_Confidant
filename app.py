@@ -4,7 +4,8 @@ import os
 
 # Configuration
 LOCAL_MODEL = "microsoft/Phi-3-mini-4k-instruct"
-API_MODEL = "openai/gpt-oss-20b"
+API_MODEL = "jakeboggs/MTG-Llama" # "openai/gpt-oss-20b"
+DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
 
 pipe = None
 stop_inference = False
@@ -73,7 +74,7 @@ def respond(
         from transformers import pipeline
         import torch
         if pipe is None:
-            pipe = pipeline("text-generation", model="microsoft/Phi-3-mini-4k-instruct")
+            pipe = pipeline("text-generation", model=LOCAL_MODEL)
 
         # Build prompt as plain text
         prompt = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
@@ -96,7 +97,7 @@ def respond(
             yield "⚠️ Please log in with your Hugging Face account first."
             return
 
-        client = InferenceClient(token=hf_token.token, model="openai/gpt-oss-20b")
+        client = InferenceClient(token=hf_token.token, model=API_MODEL)
 
         for chunk in client.chat_completion(
             messages,
@@ -116,18 +117,18 @@ def respond(
 chatbot = gr.ChatInterface(
     fn=respond,
     additional_inputs=[
-        gr.Textbox(value="You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob.", label="System message"),
+        gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message"),
         gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
         gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
         gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
-        gr.Checkbox(label="Use Local Model", value=False),
+        gr.Checkbox(label=f"Use Local Model (API model is {API_MODEL} and local model is {LOCAL_MODEL})", value=False),
     ],
     type="messages",
 )
 
 with gr.Blocks(css=fancy_css) as demo:
     with gr.Row():
-        gr.Markdown("<h1 style='text-align: center;'>🌟 Fancy AI Chatbot 🌟</h1>")
+        gr.Markdown("<h1 style='text-align: center;'>🌟 Smart Confidant 🌟</h1>")
         gr.LoginButton()
     chatbot.render()
 
