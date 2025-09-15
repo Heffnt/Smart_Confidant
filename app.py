@@ -3,12 +3,19 @@ from huggingface_hub import InferenceClient
 import os
 import base64
 from pathlib import Path
+import threading
+import time
+import logging
 
 # Configuration
 LOCAL_MODELS = ["tiiuae/Falcon-H1-0.5B-Instruct"]
 API_MODELS = ["openai/gpt-oss-20b"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant, but people tend to call you Bob."
 TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
+
+# Resource logging configuration
+RESOURCE_LOGGING_ENABLED = True
+RESOURCE_LOG_INTERVAL_SEC = 15
 
 # Create model options with labels
 MODEL_OPTIONS = []
@@ -72,6 +79,52 @@ fancy_css = f"""
         color: #333;
     }}
     """
+
+def _configure_basic_logging():
+    if len(logging.getLogger().handlers) == 0:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+        )
+
+
+def _resource_logger_worker(interval_seconds: int):
+    try:
+        import psutil
+
+        process = psutil.Process(os.getpid())
+        # Prime CPU percent calculations
+        psutil.cpu_percent(interval=None)
+        process.cpu_percent(interval=None)
+
+        while True:
+            system_cpu_percent = psutil.cpu_percent(interval=None)
+            system_mem_percent = psutil.virtual_memory().percent
+            process_rss_mb = process.memory_info().rss / (1024 * 1024)
+            process_cpu_percent = process.cpu_percent(interval=None)
+
+            logging.info(
+                f"System CPU: {system_cpu_percent:.1f}%, System Mem: {system_mem_percent:.1f}%, "
+                f"Process RSS: {process_rss_mb:.1f} MB, Process CPU: {process_cpu_percent:.1f}%"
+            )
+
+            time.sleep(interval_seconds)
+    except ImportError:
+        logging.warning("psutil not installed; resource logging disabled.")
+    except Exception as e:
+        logging.exception(f"Resource logger stopped due to error: {e}")
+
+
+def start_resource_logger():
+    _configure_basic_logging()
+    thread = threading.Thread(
+        target=_resource_logger_worker,
+        args=(RESOURCE_LOG_INTERVAL_SEC,),
+        daemon=True,
+        name="resource-logger",
+    )
+    thread.start()
+    return thread
 
 def respond(
     message,
@@ -151,7 +204,7 @@ with gr.Blocks(css=fancy_css) as demo:
         avatar_images=(str(ASSETS_DIR / "monster_icon.png"), str(ASSETS_DIR / "smart_confidant_icon.png"))
     )
     
-    # Create additional inputs in an accordion below the chatbot
+    # Create additional inputs in an accordion
     with gr.Accordion("⚙️ Additional Settings", open=False):
         system_message = gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message")
         max_tokens = gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens")
@@ -174,4 +227,6 @@ with gr.Blocks(css=fancy_css) as demo:
     )
 
 if __name__ == "__main__":
+    if RESOURCE_LOGGING_ENABLED:
+        start_resource_logger()
     demo.launch()
