@@ -7,6 +7,12 @@ on:
   release:
   create:
   delete:
+  workflow_run:
+    workflows:
+      - "Sync to Hugging Face hub"
+      - "Run chatbot test"
+    types:
+      - completed
 
 jobs:
   notify:
@@ -37,6 +43,23 @@ jobs:
               ;;
             delete)
               MESSAGE="Deleted ${{ github.event.ref_type }} ${{ github.event.ref }} by $GITHUB_ACTOR"
+              ;;
+            workflow_run)
+              NAME="${{ github.event.workflow_run.name }}"
+              CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+              BRANCH="${{ github.event.workflow_run.head_branch }}"
+              SHA="${{ github.event.workflow_run.head_sha }}"
+
+              if [ "$CONCLUSION" = "success" ]; then
+                STATUS="PASSED"
+              elif [ "$CONCLUSION" = "failure" ]; then
+                STATUS="FAILED"
+              else
+                STATUS="$CONCLUSION"
+              fi
+
+              SHORT_SHA="${SHA:0:7}"
+              MESSAGE="Workflow $NAME $STATUS on $BRANCH (commit $SHORT_SHA)"
               ;;
             *)
               MESSAGE="Event $EVENT_NAME by $GITHUB_ACTOR on ${{ github.repository }} at ${{ github.ref_name }}"
