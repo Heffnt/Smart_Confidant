@@ -19,6 +19,11 @@ stop_inference = False
 
 # Fancy styling
 fancy_css = """
+    body {
+        background-image: url('file=assets/confidant_pattern.png');
+        background-repeat: repeat;
+        background-size: auto;
+    }
     #main-container {
         background-color: #f0f0f0;
         font-family: 'Arial', sans-serif;
@@ -27,7 +32,7 @@ fancy_css = """
         max-width: 700px;
         margin: 0 auto;
         padding: 20px;
-        background: white;
+        background-color: transparent;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         border-radius: 10px;
     }
