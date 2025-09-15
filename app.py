@@ -8,6 +8,7 @@ from pathlib import Path
 LOCAL_MODELS = ["jakeboggs/MTG-Llama", "microsoft/Phi-3-mini-4k-instruct"]
 API_MODELS = ["openai/gpt-oss-20b", "meta-llama/Meta-Llama-3-8B-Instruct"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
+TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
 
 # Create model options with labels
 MODEL_OPTIONS = []
@@ -35,7 +36,7 @@ fancy_css = f"""
         background-image: url('{BACKGROUND_DATA_URL}');
         background-repeat: repeat;
         background-size: auto;
-        background-color: transparent !important;
+        background-color: transparent;
     }}
     .gradio-container {{
         max-width: 700px;
@@ -154,8 +155,9 @@ chatbot = gr.ChatInterface(
 
 with gr.Blocks(css=fancy_css) as demo:
     with gr.Row():
-        gr.Markdown("<h1 style='text-align: center;'>🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓</h1>")
         gr.LoginButton()
+    with gr.Row():
+        gr.Markdown(f"<h1 style='text-align: center;'>{TITLE}</h1>")
     chatbot.render()
 
 if __name__ == "__main__":
