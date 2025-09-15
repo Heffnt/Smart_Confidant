@@ -25,12 +25,13 @@ try:
     with open(BACKGROUND_IMAGE_PATH, "rb") as _img_f:
         _encoded_img = base64.b64encode(_img_f.read()).decode("ascii")
         BACKGROUND_DATA_URL = f"data:image/png;base64,{_encoded_img}"
-except Exception:
+except Exception as e:
+    print(f"Error loading background image: {e}")
     BACKGROUND_DATA_URL = ""
 
 # Fancy styling
 fancy_css = f"""
-    html, body, #root, .gradio-container {{
+    html, body, #root {{
         background-image: url('{BACKGROUND_DATA_URL}');
         background-repeat: repeat;
         background-size: auto;
@@ -40,7 +41,7 @@ fancy_css = f"""
         max-width: 700px;
         margin: 0 auto;
         padding: 20px;
-        background-color: #2a2a2a;
+        background-color: #2d2d2d;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         border-radius: 10px;
         font-family: 'Arial', sans-serif;
