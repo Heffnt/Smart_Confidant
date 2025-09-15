@@ -61,7 +61,7 @@ jobs:
               fi
 
               SHORT_SHA="${SHA:0:7}"
-              MESSAGE="Workflow $NAME $STATUS on $BRANCH (commit $SHORT_SHA)"
+              MESSAGE=" - Workflow $NAME $STATUS on $BRANCH (commit $SHORT_SHA)"
               ;;
             *)
               MESSAGE="Event $EVENT_NAME by $GITHUB_ACTOR on ${{ github.repository }} at ${{ github.ref_name }}"
