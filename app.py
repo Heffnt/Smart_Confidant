@@ -159,7 +159,7 @@ with gr.Blocks(css=fancy_css) as demo:
             gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
             gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
             gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
-            gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[2]),
+            gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0]),
         ],
         type="messages",
     )
