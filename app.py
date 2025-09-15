@@ -1,6 +1,8 @@
 import gradio as gr
 from huggingface_hub import InferenceClient
 import os
+import base64
+from pathlib import Path
 
 # Configuration
 LOCAL_MODELS = ["jakeboggs/MTG-Llama", "microsoft/Phi-3-mini-4k-instruct"]
@@ -17,26 +19,33 @@ for model in API_MODELS:
 pipe = None
 stop_inference = False
 
+ASSETS_DIR = Path(__file__).parent / "assets"
+BACKGROUND_IMAGE_PATH = ASSETS_DIR / "confidant_pattern.png"
+try:
+    with open(BACKGROUND_IMAGE_PATH, "rb") as _img_f:
+        _encoded_img = base64.b64encode(_img_f.read()).decode("ascii")
+        BACKGROUND_DATA_URL = f"data:image/png;base64,{_encoded_img}"
+except Exception:
+    BACKGROUND_DATA_URL = ""
+
 # Fancy styling
-fancy_css = """
-    body {
-        background-image: url('file=assets/confidant_pattern.png');
+fancy_css = f"""
+    html, body, #root, .gradio-container {{
+        background-image: url('{BACKGROUND_DATA_URL}');
         background-repeat: repeat;
         background-size: auto;
-    }
-    #main-container {
-        background-color: #f0f0f0;
-        font-family: 'Arial', sans-serif;
-    }
-    .gradio-container {
+        background-color: transparent !important;
+    }}
+    .gradio-container {{
         max-width: 700px;
         margin: 0 auto;
         padding: 20px;
-        background-color: transparent;
+        background-color: transparent !important;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         border-radius: 10px;
-    }
-    .gr-button {
+        font-family: 'Arial', sans-serif;
+    }}
+    .gr-button {{
         background-color: #4CAF50;
         color: white;
         border: none;
@@ -44,22 +53,22 @@ fancy_css = """
         padding: 10px 20px;
         cursor: pointer;
         transition: background-color 0.3s ease;
-    }
-    .gr-button:hover {
+    }}
+    .gr-button:hover {{
         background-color: #45a049;
-    }
-    .gr-slider input {
+    }}
+    .gr-slider input {{
         color: #4CAF50;
-    }
-    .gr-chat {
+    }}
+    .gr-chat {{
         font-size: 16px;
-    }
-    #title {
+    }}
+    #title {{
         text-align: center;
         font-size: 2em;
         margin-bottom: 20px;
         color: #333;
-    }
+    }}
     """
 
 def respond(
