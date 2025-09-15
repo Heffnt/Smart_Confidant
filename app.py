@@ -5,9 +5,9 @@ import base64
 from pathlib import Path
 
 # Configuration
-LOCAL_MODELS = ["jakeboggs/MTG-Llama", "microsoft/Phi-3-mini-4k-instruct"]
+LOCAL_MODELS = ["tiiuae/Falcon-H1-0.5B-Instruct", "microsoft/Phi-3-mini-4k-instruct"]
 API_MODELS = ["openai/gpt-oss-20b", "meta-llama/Meta-Llama-3-8B-Instruct"]
-DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant but people tend to call you Bob."
+DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant, but people tend to call you Bob."
 TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
 
 # Create model options with labels
@@ -142,10 +142,8 @@ def respond(
 
 
 with gr.Blocks(css=fancy_css) as demo:
-    with gr.Row():
-        gr.LoginButton()
-    with gr.Row():
-        gr.Markdown(f"<h1 style='text-align: center;'>{TITLE}</h1>")
+    gr.LoginButton()
+    gr.Markdown(f"<h1 style='text-align: center;'>{TITLE}</h1>")
     
     # Create custom chatbot with avatar images
     chatbot = gr.Chatbot(
@@ -153,7 +151,7 @@ with gr.Blocks(css=fancy_css) as demo:
         avatar_images=(str(ASSETS_DIR / "monster_icon.png"), str(ASSETS_DIR / "smart_confidant_icon.png"))
     )
     
-    # Create ChatInterface with the custom chatbot
+    # Create ChatInterface with the custom chatbot and additional inputs in accordion below
     gr.ChatInterface(
         fn=respond,
         chatbot=chatbot,
@@ -164,6 +162,7 @@ with gr.Blocks(css=fancy_css) as demo:
             gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
             gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[2]),
         ],
+        additional_inputs_accordion=gr.Accordion("Advanced Settings", open=False),
         type="messages",
     )
 
