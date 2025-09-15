@@ -10,6 +10,7 @@ API_MODELS = ["openai/gpt-oss-20b"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant, but people tend to call you Bob."
 TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
 
+
 # Create model options with labels
 MODEL_OPTIONS = []
 for model in LOCAL_MODELS:
