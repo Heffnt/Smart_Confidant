@@ -1,0 +1,73 @@
+name: Discord Notification
+
+on:
+  push:
+  pull_request:
+  issues:
+  release:
+  create:
+  delete:
+  workflow_run:
+    workflows:
+      - "Sync to Hugging Face hub"
+      - "Run chatbot test"
+    types:
+      - completed
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Discord notification
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }} # Set in Github Secrets
+        run: |
+          EVENT_NAME="${{ github.event_name }}"
+
+          case "$EVENT_NAME" in
+            push)
+              SHORT_SHA="${{ github.sha }}"
+              SHORT_SHA="${SHORT_SHA:0:7}"
+              MESSAGE="Commit ($SHORT_SHA) was pushed to ${{ github.ref_name }} branch by $GITHUB_ACTOR: ${{ github.event.head_commit.message }}"
+              ;;
+            pull_request)
+              MESSAGE="Pull request #${{ github.event.pull_request.number }} ${{ github.event.action }} by $GITHUB_ACTOR: ${{ github.event.pull_request.title }} (from ${{ github.event.pull_request.head.ref }} to ${{ github.event.pull_request.base.ref }})"
+              ;;
+            issues)
+              MESSAGE="Issue #${{ github.event.issue.number }} ${{ github.event.action }} by $GITHUB_ACTOR: ${{ github.event.issue.title }}"
+              ;;
+            release)
+              MESSAGE="Release ${{ github.event.release.tag_name }} ${{ github.event.action }} by $GITHUB_ACTOR: ${{ github.event.release.name }}"
+              ;;
+            create)
+              MESSAGE="Created ${{ github.event.ref_type }} ${{ github.event.ref }} by $GITHUB_ACTOR"
+              ;;
+            delete)
+              MESSAGE="Deleted ${{ github.event.ref_type }} ${{ github.event.ref }} by $GITHUB_ACTOR"
+              ;;
+            workflow_run)
+              NAME="${{ github.event.workflow_run.name }}"
+              CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+              BRANCH="${{ github.event.workflow_run.head_branch }}"
+              SHA="${{ github.event.workflow_run.head_sha }}"
+
+              if [ "$CONCLUSION" = "success" ]; then
+                STATUS="PASSED"
+              elif [ "$CONCLUSION" = "failure" ]; then
+                STATUS="FAILED"
+              else
+                STATUS="$CONCLUSION"
+              fi
+
+              SHORT_SHA="${SHA:0:7}"
+              MESSAGE=" - Workflow $NAME $STATUS on $BRANCH (commit $SHORT_SHA)"
+              ;;
+            *)
+              MESSAGE="Event $EVENT_NAME by $GITHUB_ACTOR on ${{ github.repository }} at ${{ github.ref_name }}"
+              ;;
+          esac
+
+          curl -X POST -H "Content-Type: application/json" \
+          -d "{\"content\": \"$MESSAGE\"}" \
+          $DISCORD_WEBHOOK_URL
