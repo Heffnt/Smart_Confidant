@@ -141,24 +141,31 @@ def respond(
             yield response
 
 
-chatbot = gr.ChatInterface(
-    fn=respond,
-    additional_inputs=[
-        gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message"),
-        gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
-        gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
-        gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
-        gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[2]),
-    ],
-    type="messages",
-)
-
 with gr.Blocks(css=fancy_css) as demo:
     with gr.Row():
         gr.LoginButton()
     with gr.Row():
         gr.Markdown(f"<h1 style='text-align: center;'>{TITLE}</h1>")
-    chatbot.render()
+    
+    # Create custom chatbot with avatar images
+    chatbot = gr.Chatbot(
+        type="messages",
+        avatar_images=(str(ASSETS_DIR / "monster_icon.png"), str(ASSETS_DIR / "smart_confidant_icon.png"))
+    )
+    
+    # Create ChatInterface with the custom chatbot
+    gr.ChatInterface(
+        fn=respond,
+        chatbot=chatbot,
+        additional_inputs=[
+            gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message"),
+            gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
+            gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
+            gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
+            gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[2]),
+        ],
+        type="messages",
+    )
 
 if __name__ == "__main__":
     demo.launch()
