@@ -6,11 +6,3 @@ __pycache__/
 *.sqlite3
 *.log
 *.env
-
-# Images
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.svg
