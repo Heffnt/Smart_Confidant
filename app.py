@@ -10,7 +10,6 @@ API_MODELS = ["openai/gpt-oss-20b"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant, but people tend to call you Bob."
 TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
 
-
 # Create model options with labels
 MODEL_OPTIONS = []
 for model in LOCAL_MODELS:
@@ -152,18 +151,25 @@ with gr.Blocks(css=fancy_css) as demo:
         avatar_images=(str(ASSETS_DIR / "monster_icon.png"), str(ASSETS_DIR / "smart_confidant_icon.png"))
     )
     
-    # Create ChatInterface first, using built-in accordion for additional inputs
+    # Create additional inputs in an accordion below the chatbot
+    with gr.Accordion("⚙️ Additional Settings", open=False):
+        system_message = gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message")
+        max_tokens = gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens")
+        temperature = gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature")
+        top_p = gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)")
+        selected_model = gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0])
+    
+    # Create ChatInterface with the custom chatbot and pre-rendered additional inputs
     gr.ChatInterface(
         fn=respond,
         chatbot=chatbot,
         additional_inputs=[
-            gr.Textbox(value=DEFAULT_SYSTEM_MESSAGE, label="System message"),
-            gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens"),
-            gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature"),
-            gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)"),
-            gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0]),
+            system_message,
+            max_tokens,
+            temperature,
+            top_p,
+            selected_model,
         ],
-        additional_inputs_accordion="Additional Settings",
         type="messages",
     )
 
