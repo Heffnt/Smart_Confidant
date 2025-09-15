@@ -40,7 +40,7 @@ fancy_css = f"""
         max-width: 700px;
         margin: 0 auto;
         padding: 20px;
-        background-color: transparent !important;
+        background-color: #2a2a2a;
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         border-radius: 10px;
         font-family: 'Arial', sans-serif;
