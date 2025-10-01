@@ -1,9 +1,9 @@
-name: Rebuild
+name: Update SSH Key
 
 on:
   workflow_dispatch:  # Manual trigger
   schedule:
-    - cron: '0 */1 * * *'  # Every hour
+    - cron: '0 */6 * * *'  # Every 6 hours
 
 jobs:
   update-key:
@@ -16,18 +16,18 @@ jobs:
         chmod 700 ~/.ssh
         
         # Save your personal private key
-        echo "${{ secrets.MLOPSKEY_PRIVATE }}" > ~/.ssh/mlopskey
+        echo "${{ secrets.MLOPS_PRIVATE_KEY }}" > ~/.ssh/mlopskey
         chmod 600 ~/.ssh/mlopskey
         
         # Save your public key
-        echo "${{ secrets.MLOPSKEY_PUBLIC }}" > ~/.ssh/mlopskey.pub
+        echo "${{ secrets.MLOPS_PUBLIC_KEY }}" > ~/.ssh/mlopskey.pub
         
         # Save the old student-admin key
         echo "${{ secrets.STUDENT_ADMIN_KEY }}" > ~/.ssh/student-admin_key
         chmod 600 ~/.ssh/student-admin_key
         
-        # Disable host key checking
-        echo "StrictHostKeyChecking no" > ~/.ssh/config
+        # Disable host key checking and accept new host keys
+        echo -e "StrictHostKeyChecking no\nUserKnownHostsFile /dev/null" > ~/.ssh/config
     
     - name: Try connecting with personal key
       id: check_personal
