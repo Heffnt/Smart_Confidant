@@ -5,4 +5,21 @@ __pycache__/
 *.db
 *.sqlite3
 *.log
-*.env
+.env
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Conda
+.conda/
+*.egg-info/
+
+# uv
+.python-version
+uv.lock
+
+# Temporary files
+tmp/
