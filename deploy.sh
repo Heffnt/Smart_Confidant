@@ -1,196 +1,286 @@
 #! /bin/bash
 
+# ============================================================================
+# Smart Confidant - Docker Deployment Script for Melnibone
+# Deploys from laptop to melnibone.wpi.edu using Docker
+# ============================================================================
+
+set -e  # Exit on error
+
 # Configuration
-PORT=22012
-MACHINE=paffenroth-23.dyn.wpi.edu
-MY_KEY_PATH=$HOME/.ssh/mlopskey  # Path to your personal SSH key
-STUDENT_ADMIN_KEY_PATH=$HOME/.ssh/student-admin_key  # Path to student-admin fallback key
+PORT=2222
+MACHINE=melnibone.wpi.edu
+USER=group12
+MY_KEY_PATH=$HOME/.ssh/mlops  # Path to your SSH key for melnibone
+
+# Docker configuration
+DOCKER_USER=heffnt
+DOCKER_IMAGE=smart_confidant
+DOCKER_TAG=cs3
+FULL_IMAGE_NAME=${DOCKER_USER}/${DOCKER_IMAGE}:${DOCKER_TAG}
+
+# Container configuration
+CONTAINER_NAME=smart_confidant
+GRADIO_PORT=2727
+METRICS_PORT=2728
+NODE_EXPORTER_PORT=2729
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Helper functions
+log_info() {
+    echo -e "${BLUE}→${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1"
+}
 
 # Load environment variables from .env file if it exists
 if [ -f .env ]; then
-    echo "Loading environment variables from .env file..."
+    log_info "Loading environment variables from .env file..."
     export $(grep -v '^#' .env | xargs)
 fi
 
-# Clean up from previous runs
-ssh-keygen -f "$HOME/.ssh/known_hosts" -R "[$MACHINE]:$PORT" 2>/dev/null
-rm -rf tmp
-
-# Create a temporary directory
-mkdir tmp
-
-# Change the permissions of the directory
-chmod 700 tmp
-
-# Change to the temporary directory
-cd tmp
-
-echo "Checking if personal key works..." 
-# Try connecting with personal key
-if ssh -i ${MY_KEY_PATH} -p ${PORT} -o StrictHostKeyChecking=no -o ConnectTimeout=10 student-admin@${MACHINE} "echo 'success'" > /dev/null 2>&1; then
-    echo "✓ Personal key works! No update needed."
-    MY_KEY=${MY_KEY_PATH}
+# Check if HF_TOKEN is set
+if [ -z "$HF_TOKEN" ]; then
+    log_warning "HF_TOKEN not set - API models will not work"
+    log_warning "Set it in .env file or export HF_TOKEN=your_token"
 else
-    echo "✗ Personal key failed. Updating with student-admin key..."
-    
-    # Check if the keys exist
-    if [ ! -f "${MY_KEY_PATH}.pub" ]; then
-        echo "Error: Personal public key not found at ${MY_KEY_PATH}.pub"
-        echo "Creating a new key pair..."
-        ssh-keygen -f ${MY_KEY_PATH} -t ed25519 -N ""
-    fi
-    
-    if [ ! -f "${STUDENT_ADMIN_KEY_PATH}" ]; then
-        echo "Error: Student-admin key not found at ${STUDENT_ADMIN_KEY_PATH}"
-        exit 1
-    fi
-    
-    # Read the public key content
-    MY_PUB_KEY=$(cat ${MY_KEY_PATH}.pub)
-    
-    # Update authorized_keys on the server using student-admin key
-    echo "Connecting with student-admin key to update authorized_keys..."
-    ssh -i ${STUDENT_ADMIN_KEY_PATH} -p ${PORT} -o StrictHostKeyChecking=no student-admin@${MACHINE} << EOF
-mkdir -p ~/.ssh
-chmod 700 ~/.ssh
-touch ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
-# Remove any old keys from this machine
-grep -v 'rcpaffenroth@paffenroth-23' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp 2>/dev/null || true
-mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys 2>/dev/null || true
-# Add the new key
-echo '${MY_PUB_KEY}' >> ~/.ssh/authorized_keys
-echo 'Key updated'
-EOF
-    
-    if [ $? -ne 0 ]; then
-        echo "Failed to update key with student-admin key"
-        exit 1
-    fi
-    
-    # Verify the personal key now works
-    echo "Verifying personal key..."
-    sleep 2
-    
-    if ssh -i ${MY_KEY_PATH} -p ${PORT} -o StrictHostKeyChecking=no student-admin@${MACHINE} "echo 'success'" > /dev/null 2>&1; then
-        echo "✓ Success! Personal key is now working."
-        MY_KEY=${MY_KEY_PATH}
-    else
-        echo "✗ Personal key still not working after update"
-        exit 1
-    fi
+    log_success "HF_TOKEN found"
 fi
 
-# Add the key to the ssh-agent
-eval "$(ssh-agent -s)"
-ssh-add ${MY_KEY}
+# ============================================================================
+# Step 1: Build Docker Image Locally
+# ============================================================================
+echo ""
+echo "========================================"
+echo "Step 1: Building Docker Image"
+echo "========================================"
 
-# Check the key file on the server
-echo "Checking authorized_keys on server:"
-ssh -i ${MY_KEY} -p ${PORT} -o StrictHostKeyChecking=no student-admin@${MACHINE} "cat ~/.ssh/authorized_keys"
-
-# Clone or copy the repo
-# If using git:
-# git clone https://github.com/yourusername/Smart_Confidant
-# Or just copy the local directory:
-echo "Copying Smart_Confidant code..."
-mkdir -p Smart_Confidant
-# Copy all files except tmp and .git directories
-for item in ../*; do
-    base=$(basename "$item")
-    if [ "$base" != "tmp" ] && [ "$base" != ".git" ]; then
-        cp -r "$item" Smart_Confidant/
-    fi
-done
-
-# Copy the files to the server
-echo "Uploading code to server..."
-scp -i ${MY_KEY} -P ${PORT} -o StrictHostKeyChecking=no -r Smart_Confidant student-admin@${MACHINE}:~/
-
-if [ $? -eq 0 ]; then
-    echo "✓ Code successfully uploaded to server"
+log_info "Building Docker image: ${FULL_IMAGE_NAME}"
+if docker build -t ${FULL_IMAGE_NAME} .; then
+    log_success "Docker image built successfully"
 else
-    echo "✗ Failed to upload code"
+    log_error "Docker build failed"
     exit 1
 fi
 
-# Define SSH command for subsequent steps using the confirmed key
-COMMAND="ssh -i ${MY_KEY} -p ${PORT} -o StrictHostKeyChecking=no student-admin@${MACHINE}"
+# ============================================================================
+# Step 2: Push to DockerHub
+# ============================================================================
+echo ""
+echo "========================================"
+echo "Step 2: Pushing to DockerHub"
+echo "========================================"
 
-# Run all setup in a single SSH session
-echo "Setting up environment on remote server..."
-# Pass HF_TOKEN to the remote session
-${COMMAND} bash -s << ENDSSH
+log_info "Checking Docker login status..."
+if docker info 2>/dev/null | grep -q "Username: ${DOCKER_USER}"; then
+    log_success "Already logged in to DockerHub as ${DOCKER_USER}"
+elif docker login --username ${DOCKER_USER} 2>/dev/null; then
+    log_success "Logged in to DockerHub"
+else
+    log_error "Not logged in to DockerHub"
+    log_info "Please run: docker login --username ${DOCKER_USER}"
+    exit 1
+fi
+
+log_info "Pushing image to DockerHub..."
+if docker push ${FULL_IMAGE_NAME}; then
+    log_success "Image pushed to DockerHub"
+else
+    log_error "Failed to push image to DockerHub"
+    exit 1
+fi
+
+# ============================================================================
+# Step 3: Verify SSH Access to Melnibone
+# ============================================================================
+echo ""
+echo "========================================"
+echo "Step 3: Verifying SSH Access"
+echo "========================================"
+
+# Clean up known_hosts entry for melnibone
+ssh-keygen -f "$HOME/.ssh/known_hosts" -R "[${MACHINE}]:${PORT}" 2>/dev/null || true
+
+if [ ! -f "${MY_KEY_PATH}" ]; then
+    log_error "SSH key not found at ${MY_KEY_PATH}"
+    log_info "Please ensure your SSH key is set up correctly"
+    exit 1
+fi
+
+log_info "Testing SSH connection to ${USER}@${MACHINE}:${PORT}..."
+if ssh -i ${MY_KEY_PATH} -p ${PORT} -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${USER}@${MACHINE} "echo 'success'" > /dev/null 2>&1; then
+    log_success "SSH connection successful"
+else
+    log_error "SSH connection failed"
+    log_info "Make sure you can connect with: ssh -i ${MY_KEY_PATH} -p ${PORT} ${USER}@${MACHINE}"
+    exit 1
+fi
+
+# ============================================================================
+# Step 4: Deploy to Melnibone
+# ============================================================================
+echo ""
+echo "========================================"
+echo "Step 4: Deploying to Melnibone"
+echo "========================================"
+
+# Define SSH command
+SSH_CMD="ssh -i ${MY_KEY_PATH} -p ${PORT} -o StrictHostKeyChecking=no ${USER}@${MACHINE}"
+
+log_info "Deploying to remote server..."
+
+# Run deployment commands on remote server
+${SSH_CMD} bash -s << ENDSSH
 set -e
-export HF_TOKEN='${HF_TOKEN}'
 
-# Stop old process
-echo "→ Stopping old process if running..."
-pkill -f 'python.*app.py' || true
-
-# Check if micromamba is installed
-if [ ! -f ~/bin/micromamba ]; then
-    echo "→ Installing micromamba..."
-    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj -C ~/ bin/micromamba
-    mkdir -p ~/micromamba
-    export MAMBA_ROOT_PREFIX=~/micromamba
-    echo 'export MAMBA_ROOT_PREFIX=~/micromamba' >> ~/.bashrc
-    echo 'eval "$(~/bin/micromamba shell hook -s bash)"' >> ~/.bashrc
-    echo "✓ Micromamba installed"
+echo "→ Pulling Docker image from DockerHub..."
+if docker pull ${FULL_IMAGE_NAME}; then
+    echo "✓ Image pulled successfully"
 else
-    echo "✓ Micromamba already installed"
-    export MAMBA_ROOT_PREFIX=~/micromamba
+    echo "✗ Failed to pull image"
+    exit 1
 fi
 
-eval "$(~/bin/micromamba shell hook -s bash)" 2>/dev/null || true
+echo "→ Stopping existing container if running..."
+docker stop ${CONTAINER_NAME} 2>/dev/null || echo "  (no container to stop)"
 
-cd Smart_Confidant
+echo "→ Removing existing container..."
+docker rm ${CONTAINER_NAME} 2>/dev/null || echo "  (no container to remove)"
 
-# Check if environment exists
-if ~/bin/micromamba env list | grep -q "smart-confidant"; then
-    echo "→ Updating existing environment..."
-    ~/bin/micromamba install -n smart-confidant -f environment.yml -y
+echo "→ Starting new container..."
+docker run -d \\
+    --name ${CONTAINER_NAME} \\
+    -p ${GRADIO_PORT}:8012 \\
+    -p ${METRICS_PORT}:8000 \\
+    -p ${NODE_EXPORTER_PORT}:9100 \\
+    -e HF_TOKEN="${HF_TOKEN}" \\
+    ${FULL_IMAGE_NAME}
+
+if [ \$? -eq 0 ]; then
+    echo "✓ Container started successfully"
 else
-    echo "→ Creating new environment..."
-    ~/bin/micromamba create -f environment.yml -y
+    echo "✗ Failed to start container"
+    exit 1
 fi
 
-# Check if uv is installed
-if ! ~/bin/micromamba run -n smart-confidant which uv &>/dev/null; then
-    echo "→ Installing uv..."
-    ~/bin/micromamba run -n smart-confidant pip install uv
-else
-    echo "✓ uv already installed"
-fi
-
-# Install/update dependencies
-echo "→ Installing/updating dependencies..."
-~/bin/micromamba run -n smart-confidant uv pip install -e .
-
-# Start application
-echo "→ Starting application..."
-# Pass HF_TOKEN if it exists
-if [ ! -z "$HF_TOKEN" ]; then
-    echo "→ HF_TOKEN provided, API models will be available"
-    nohup ~/bin/micromamba run -n smart-confidant -e HF_TOKEN="$HF_TOKEN" python -u app.py > ~/log.txt 2>&1 &
-else
-    echo "⚠ HF_TOKEN not set - API models will not work"
-    nohup ~/bin/micromamba run -n smart-confidant python -u app.py > ~/log.txt 2>&1 &
-fi
-
-# Wait for the app to start
+# Wait for container to be ready
+echo "→ Waiting for container to start..."
 sleep 5
 
-echo "✓ Setup complete"
+# Verify container is running
+if docker ps | grep -q ${CONTAINER_NAME}; then
+    echo "✓ Container is running"
+else
+    echo "✗ Container failed to start"
+    docker logs ${CONTAINER_NAME}
+    exit 1
+fi
+
+# Verify ports are accessible
+echo "→ Verifying ports..."
+curl -s -o /dev/null -w "%{http_code}" http://localhost:${GRADIO_PORT} | grep -q "200" && echo "✓ Gradio port ${GRADIO_PORT} is accessible"
+curl -s http://localhost:${METRICS_PORT}/metrics | grep -q "smart_confidant" && echo "✓ Metrics port ${METRICS_PORT} is accessible"
+curl -s http://localhost:${NODE_EXPORTER_PORT}/metrics | grep -q "node_" && echo "✓ Node exporter port ${NODE_EXPORTER_PORT} is accessible"
+
 ENDSSH
 
-# Extract the Gradio share link from the remote log file
-SHARE_LINK=$(${COMMAND} "grep -oP 'https://[a-z0-9]+\.gradio\.live' ~/log.txt | tail -1" 2>/dev/null)
+if [ $? -eq 0 ]; then
+    log_success "Deployment to melnibone completed successfully"
+else
+    log_error "Deployment failed"
+    exit 1
+fi
 
+# ============================================================================
+# Step 5: Setup ngrok Tunnel
+# ============================================================================
+echo ""
+echo "========================================"
+echo "Step 5: Setting up ngrok Tunnel"
+echo "========================================"
+
+log_info "Setting up ngrok tunnel for global access..."
+
+${SSH_CMD} bash -s << 'ENDSSH'
+set -e
+
+# Kill any existing ngrok processes for this port
+echo "→ Stopping existing ngrok tunnels for port 2727..."
+pkill -f "ngrok http 2727" 2>/dev/null || echo "  (no existing tunnel to stop)"
+sleep 2
+
+# Start new ngrok tunnel
+echo "→ Starting ngrok tunnel..."
+nohup ngrok http 2727 --log=stdout > ~/ngrok_smart_confidant.log 2>&1 &
+NGROK_PID=$!
+
+# Wait for ngrok to start
+sleep 5
+
+# Check if ngrok started successfully
+if ps -p $NGROK_PID > /dev/null 2>&1; then
+    echo "✓ ngrok started successfully (PID: $NGROK_PID)"
+
+    # Extract the ngrok URL from the log
+    NGROK_URL=$(grep -o "url=https://[^ ]*" ~/ngrok_smart_confidant.log | head -1 | cut -d'=' -f2)
+
+    if [ ! -z "$NGROK_URL" ]; then
+        echo "NGROK_URL=$NGROK_URL"
+    else
+        echo "⚠ Could not extract ngrok URL from log"
+        echo "Check ~/ngrok_smart_confidant.log on the server"
+    fi
+else
+    echo "✗ ngrok failed to start"
+    cat ~/ngrok_smart_confidant.log
+    exit 1
+fi
+ENDSSH
+
+# Extract the ngrok URL from the SSH output
+NGROK_URL=$(${SSH_CMD} "grep -o 'url=https://[^ ]*' ~/ngrok_smart_confidant.log | head -1 | cut -d'=' -f2")
+
+# ============================================================================
+# Deployment Summary
+# ============================================================================
 echo ""
 echo "=========================================="
-echo "Deployment complete!"
-echo "Public Gradio Share Link: ${SHARE_LINK}"
-echo "==========================================="
-
-
+echo "🎉 DEPLOYMENT COMPLETE!"
+echo "=========================================="
+echo ""
+echo "Docker Image: ${FULL_IMAGE_NAME}"
+echo "Container Name: ${CONTAINER_NAME}"
+echo ""
+echo "Access URLs:"
+echo "  🌐 Public URL (ngrok):  ${NGROK_URL}"
+echo "  🏠 Local Gradio:        http://localhost:${GRADIO_PORT}"
+echo "  📊 App Metrics:         http://localhost:${METRICS_PORT}/metrics"
+echo "  🖥️  System Metrics:      http://localhost:${NODE_EXPORTER_PORT}/metrics"
+echo ""
+echo "Port Mappings:"
+echo "  ${GRADIO_PORT} → 8012 (Gradio Interface)"
+echo "  ${METRICS_PORT} → 8000 (Application Metrics)"
+echo "  ${NODE_EXPORTER_PORT} → 9100 (Node Exporter)"
+echo ""
+echo "Container Management:"
+echo "  View logs:    ssh -i ${MY_KEY_PATH} -p ${PORT} ${USER}@${MACHINE} 'docker logs ${CONTAINER_NAME}'"
+echo "  Stop:         ssh -i ${MY_KEY_PATH} -p ${PORT} ${USER}@${MACHINE} 'docker stop ${CONTAINER_NAME}'"
+echo "  Restart:      ssh -i ${MY_KEY_PATH} -p ${PORT} ${USER}@${MACHINE} 'docker restart ${CONTAINER_NAME}'"
+echo ""
+echo "=========================================="

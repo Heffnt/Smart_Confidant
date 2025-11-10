@@ -69,9 +69,6 @@ The app will be available at `http://your-server:8012`
 
 ### API Models (require HF_TOKEN)
 - **HuggingFaceH4/zephyr-7b-beta** (7B params) - Recommended: Best quality for chat
-- **google/gemma-2-2b-it** (2B params) - Instruction-tuned, good balance
-- **distilgpt2** (82M params) - Very small and fast (older generation)
-- **gpt2** (124M params) - Reliable baseline (older generation)
 
 ### Local Models (run on your device)
 - **arnir0/Tiny-LLM** - Very small model for testing

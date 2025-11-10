@@ -12,13 +12,23 @@ from pathlib import Path
 import traceback
 from datetime import datetime
 from threading import Lock
+import time
+from prometheus_client import start_http_server, Counter, Summary, Gauge
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # If python-dotenv not installed, skip (will use system env vars only)
+    pass
 
 # ============================================================================
 # Configuration
 # ============================================================================
 
 LOCAL_MODELS = ["arnir0/Tiny-LLM"]
-API_MODELS = ["google/gemma-2-2b-it", "HuggingFaceH4/zephyr-7b-beta"]
+API_MODELS = ["meta-llama/Llama-3.2-3B-Instruct"]
 DEFAULT_SYSTEM_MESSAGE = "You are an expert assistant for Magic: The Gathering. You're name is Smart Confidant, but people tend to call you Bob."
 TITLE = "🎓🧙🏻‍♂️ Smart Confidant 🧙🏻‍♂️🎓"
 
@@ -57,6 +67,26 @@ def get_debug_logs():
     """Retrieve all debug logs as a single string."""
     with debug_lock:
         return "\n".join(debug_logs)
+
+# ============================================================================
+# Prometheus Metrics
+# ============================================================================
+
+# Core request metrics
+REQUEST_COUNTER = Counter('smart_confidant_requests_total', 'Total number of chat requests')
+SUCCESSFUL_REQUESTS = Counter('smart_confidant_successful_requests_total', 'Total number of successful requests')
+FAILED_REQUESTS = Counter('smart_confidant_failed_requests_total', 'Total number of failed requests')
+REQUEST_DURATION = Summary('smart_confidant_request_duration_seconds', 'Time spent processing request')
+
+# Enhanced chatbot metrics
+MODEL_SELECTION_COUNTER = Counter('smart_confidant_model_selections_total',
+                                   'Count of model selections',
+                                   ['model_name', 'model_type'])
+TOKEN_COUNT = Summary('smart_confidant_tokens_generated', 'Number of tokens generated per response')
+CONVERSATION_LENGTH = Gauge('smart_confidant_conversation_length', 'Number of messages in current conversation')
+ERROR_BY_TYPE = Counter('smart_confidant_errors_by_type_total',
+                       'Count of errors by type',
+                       ['error_type'])
 
 # ============================================================================
 # Asset Loading & Theme Configuration
@@ -197,7 +227,7 @@ def respond(
 ):
     """
     Handle chat responses using either local transformers models or HuggingFace API.
-    
+
     Args:
         message: User's input message
         history: List of previous messages in conversation
@@ -206,12 +236,16 @@ def respond(
         temperature: Sampling temperature (higher = more random)
         top_p: Nucleus sampling threshold
         selected_model: Model identifier with "(local)" or "(api)" suffix
-    
+
     Yields:
         str: Generated response text or error message
     """
     global pipe
-    
+
+    # Prometheus metrics: Track request start
+    REQUEST_COUNTER.inc()
+    start_time = time.perf_counter()
+
     try:
         log_debug(f"New message received: '{message[:50]}...'")
         log_debug(f"Selected model: {selected_model}")
@@ -226,7 +260,12 @@ def respond(
         # Parse model type and name from selection
         is_local = selected_model.endswith("(local)")
         model_name = selected_model.replace(" (local)", "").replace(" (api)", "")
-        
+
+        # Prometheus metrics: Track model selection and conversation length
+        model_type = "local" if is_local else "api"
+        MODEL_SELECTION_COUNTER.labels(model_name=model_name, model_type=model_type).inc()
+        CONVERSATION_LENGTH.set(len(messages))
+
         response = ""
 
         if is_local:
@@ -263,14 +302,25 @@ def respond(
                 # Extract new tokens only (strip original prompt)
                 response = outputs[0]["generated_text"][len(prompt):]
                 log_debug(f"Response length: {len(response)} characters")
+
+                # Prometheus metrics: Track success and approximate token count
+                SUCCESSFUL_REQUESTS.inc()
+                TOKEN_COUNT.observe(len(response.split()))  # Approximate token count using word count
+
                 yield response.strip()
 
             except ImportError as e:
+                # Prometheus metrics: Track error
+                FAILED_REQUESTS.inc()
+                ERROR_BY_TYPE.labels(error_type="import_error").inc()
                 error_msg = f"Import error: {str(e)}"
                 log_debug(error_msg, "ERROR")
                 log_debug(traceback.format_exc(), "ERROR")
                 yield f"❌ Import Error: {str(e)}\n\nPlease check log.txt for details."
             except Exception as e:
+                # Prometheus metrics: Track error
+                FAILED_REQUESTS.inc()
+                ERROR_BY_TYPE.labels(error_type="local_model_error").inc()
                 error_msg = f"Local model error: {str(e)}"
                 log_debug(error_msg, "ERROR")
                 log_debug(traceback.format_exc(), "ERROR")
@@ -291,7 +341,6 @@ def respond(
                 # Create HuggingFace Inference client
                 log_debug("Creating InferenceClient...")
                 client = InferenceClient(
-                    provider="auto",
                     api_key=hf_token,
                 )
                 log_debug("InferenceClient created successfully")
@@ -308,33 +357,57 @@ def respond(
                 
                 response = completion.choices[0].message.content
                 log_debug(f"Completion received. Response length: {len(response)} characters")
+
+                # Prometheus metrics: Track success and approximate token count
+                SUCCESSFUL_REQUESTS.inc()
+                TOKEN_COUNT.observe(len(response.split()))  # Approximate token count using word count
+
                 yield response
-            
+
             except Exception as e:
+                # Prometheus metrics: Track error
+                FAILED_REQUESTS.inc()
+                ERROR_BY_TYPE.labels(error_type="api_error").inc()
                 error_msg = f"API error: {str(e)}"
                 log_debug(error_msg, "ERROR")
                 log_debug(traceback.format_exc(), "ERROR")
                 yield f"❌ API Error: {str(e)}\n\nPlease check log.txt for details."
 
     except Exception as e:
+        # Prometheus metrics: Track error
+        FAILED_REQUESTS.inc()
+        ERROR_BY_TYPE.labels(error_type="unexpected_error").inc()
         error_msg = f"Unexpected error in respond function: {str(e)}"
         log_debug(error_msg, "ERROR")
         log_debug(traceback.format_exc(), "ERROR")
         yield f"❌ Unexpected Error: {str(e)}\n\nPlease check log.txt for details."
+    finally:
+        # Prometheus metrics: Record request duration
+        REQUEST_DURATION.observe(time.perf_counter() - start_time)
 
 
 # ============================================================================
 # Gradio UI Definition
 # ============================================================================
 
+# Allow Gradio to serve static files from assets directory (requires absolute path)
+ASSETS_DIR_ABSOLUTE = str(Path(__file__).parent / "assets")
+gr.set_static_paths(paths=[ASSETS_DIR_ABSOLUTE])
+
 with gr.Blocks(theme=TransparentTheme(), css=fancy_css) as demo:
     # Title banner
     gr.Markdown(f"<h1 id='title' style='text-align: center;'>{TITLE}</h1>")
-    
-    # Chatbot component with custom avatar icons
+
+    # Chatbot component with custom avatar icons (using forward slashes for web serving)
+    # Gradio serves files via HTTP URLs which require forward slashes, not Windows backslashes
+    MONSTER_ICON = str((ASSETS_DIR / "monster_icon.png").as_posix())
+    BOT_ICON = str((ASSETS_DIR / "smart_confidant_icon.png").as_posix())
+    log_debug(f"Monster icon path: {MONSTER_ICON}")
+    log_debug(f"Bot icon path: {BOT_ICON}")
+
     chatbot = gr.Chatbot(
         type="messages",
-        avatar_images=(str(ASSETS_DIR / "monster_icon.png"), str(ASSETS_DIR / "smart_confidant_icon.png"))
+        avatar_images=(MONSTER_ICON, BOT_ICON)
     )
     
     # Collapsible settings panel
@@ -343,7 +416,7 @@ with gr.Blocks(theme=TransparentTheme(), css=fancy_css) as demo:
         max_tokens = gr.Slider(minimum=1, maximum=2048, value=512, step=1, label="Max new tokens")
         temperature = gr.Slider(minimum=0.1, maximum=2.0, value=0.7, step=0.1, label="Temperature")
         top_p = gr.Slider(minimum=0.1, maximum=1.0, value=0.95, step=0.05, label="Top-p (nucleus sampling)")
-        selected_model = gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[0])
+        selected_model = gr.Radio(choices=MODEL_OPTIONS, label="Select Model", value=MODEL_OPTIONS[1])
     
     # Wire up chat interface with response handler
     gr.ChatInterface(
@@ -369,6 +442,11 @@ if __name__ == "__main__":
     log_debug(f"Available models: {MODEL_OPTIONS}")
     log_debug(f"HF_TOKEN present: {'Yes' if os.environ.get('HF_TOKEN') else 'No'}")
     log_debug("="*50)
-    
+
+    # Start Prometheus metrics server on port 8000
+    log_debug("Starting Prometheus metrics server on port 8000")
+    start_http_server(8000)
+    log_debug("Prometheus metrics server started - available at http://0.0.0.0:8000/metrics")
+
     # Launch on all interfaces for VM/container deployment, with Gradio share link
-    demo.launch(server_name="0.0.0.0", server_port=8012, share=True)
+    demo.launch(server_name="0.0.0.0", server_port=8012, share=True, allowed_paths=[ASSETS_DIR_ABSOLUTE])
