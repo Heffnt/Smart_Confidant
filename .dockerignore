@@ -1,7 +1,6 @@
 # Git
 .git
 .gitignore
-.gitattributes
 
 # Documentation
 *.md
@@ -39,9 +38,4 @@ tmp/
 
 # Development files
 .python-version
-deploy.sh
-docker-compose.yml
-
-# Test files
-tests/
-
+deploy.py
