@@ -29,3 +29,6 @@ tmp/
 
 # Claude Code
 .claude/
+
+# Secrets
+key.json
